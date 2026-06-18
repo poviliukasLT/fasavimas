@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lipdukų užsakymo skaičiuoklė</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F6F4EE;
+    --surface:#FFFFFF;
+    --border:#E3DFD3;
+    --ink:#20241F;
+    --ink-soft:#5B6058;
+    --accent:#2F6F4E;
+    --accent-soft:#E7F0EA;
+    --warn:#B5482D;
+    --warn-soft:#FBEAE4;
+    --hole:#D8D2C0;
+    --shadow: 0 1px 2px rgba(32,36,31,0.04), 0 8px 24px rgba(32,36,31,0.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.5;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---- header / "label sheet" signature ---- */
+  .masthead{
+    position:relative;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:30px 36px 26px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    margin-bottom:28px;
+  }
+  .perforation{
+    position:absolute; top:0; left:0; right:0; height:14px;
+    background-image: radial-gradient(circle at center, var(--hole) 0 4px, transparent 4.5px);
+    background-size: 26px 14px;
+    background-position: 13px -7px;
+    opacity:.9;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:10px 0 10px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:30px;
+    letter-spacing:-0.01em;
+    margin:0 0 8px;
+  }
+  .sub{
+    color:var(--ink-soft);
+    font-size:15px;
+    max-width:640px;
+    margin:0;
+  }
+
+  /* ---- steps ---- */
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px;}
+  @media (max-width:760px){ .steps{grid-template-columns:1fr;} }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px 22px 20px;
+    box-shadow:var(--shadow);
+  }
+  .step-head{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .step-num{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    width:26px;height:26px;
+    border-radius:50%;
+    background:var(--accent-soft);
+    color:var(--accent);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .step-title{font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px;}
+  .step-desc{color:var(--ink-soft); font-size:13.5px; margin:0 0 14px; padding-left:36px;}
+
+  .dropzone{
+    border:1.5px dashed var(--border);
+    border-radius:10px;
+    padding:18px;
+    text-align:center;
+    cursor:pointer;
+    transition:.15s border-color, .15s background;
+    font-size:13.5px;
+    color:var(--ink-soft);
+  }
+  .dropzone:hover{border-color:var(--accent); background:var(--accent-soft);}
+  .dropzone input{display:none;}
+  .dropzone .fname{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--ink); word-break:break-all;}
+
+  .status-line{
+    display:flex; align-items:flex-start; gap:8px;
+    font-size:13px; margin-top:12px; padding:10px 12px;
+    border-radius:8px;
+  }
+  .status-line.ok{background:var(--accent-soft); color:#1F4E37;}
+  .status-line.err{background:var(--warn-soft); color:var(--warn);}
+  .status-line.idle{display:none;}
+  .status-icon{flex-shrink:0; margin-top:1px;}
+
+  .actions{display:flex; justify-content:center; margin:26px 0;}
+  button{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    border:none;
+    border-radius:10px;
+    padding:13px 28px;
+    cursor:pointer;
+    transition:.15s transform, .15s box-shadow, .15s opacity;
+  }
+  button:active{transform:translateY(1px);}
+  .btn-primary{background:var(--accent); color:#fff; box-shadow:0 6px 16px rgba(47,111,78,0.28);}
+  .btn-primary:disabled{background:#C9C2AE; box-shadow:none; cursor:not-allowed; opacity:.7;}
+  .btn-secondary{background:var(--surface); color:var(--ink); border:1px solid var(--border);}
+  .btn-ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--border); font-size:13px; padding:9px 16px;}
+
+  /* ---- results ---- */
+  .results-card{display:none;}
+  .results-head{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .summary-pills{display:flex; gap:8px; flex-wrap:wrap;}
+  .pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    padding:6px 11px;
+    border-radius:999px;
+    background:var(--accent-soft); color:#1F4E37;
+    border:1px solid transparent;
+  }
+  .pill.warn{background:var(--warn-soft); color:var(--warn);}
+
+  .table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:12px;}
+  table{width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; min-width:900px;}
+  thead th{
+    text-align:left;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:11.5px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    background:#FAF8F3;
+    padding:11px 8px;
+    border-bottom:1px solid var(--border);
+    white-space:normal;
+    line-height:1.25;
+  }
+  tbody td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--border);
+    vertical-align:middle;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.needs-review{background:var(--warn-soft);}
+  .src-cell{font-size:11.5px; color:var(--ink-soft); line-height:1.35;}
+  .src-cell b{color:var(--ink); font-weight:600;}
+  .src-code{font-family:'IBM Plex Mono',monospace; background:#F1EEE5; border:1px solid var(--border); border-radius:6px; padding:1px 6px; font-size:11.5px;}
+
+  td input, td select{
+    width:100%;
+    box-sizing:border-box;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    padding:6px 7px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    background:#fff;
+    color:var(--ink);
+    text-overflow:ellipsis;
+    overflow:hidden;
+    white-space:nowrap;
+  }
+  td select{font-family:'Inter',sans-serif; font-size:11.5px;}
+  td input:focus, td select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);}
+  .num-input{font-family:'IBM Plex Mono',monospace; text-align:right;}
+  .num-input::-webkit-inner-spin-button, .num-input::-webkit-outer-spin-button{-webkit-appearance:none; margin:0;}
+  .num-input{-moz-appearance:textfield;}
+  .col-num{width:28px;}
+  .col-source{width:200px;}
+  .col-aprasymas{width:220px;}
+  .col-select{width:200px;}
+  .col-svoris{width:54px;}
+  .col-kiekis{width:52px;}
+  .col-date{width:82px;}
+  .col-status{width:30px;}
+  .status-dot{display:inline-block; width:9px; height:9px; border-radius:50%; }
+  .status-dot.ok{background:var(--accent);}
+  .status-dot.warn{background:var(--warn);}
+
+  .legend{display:flex; gap:18px; font-size:12px; color:var(--ink-soft); margin-top:10px; flex-wrap:wrap;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+
+  footer{text-align:center; color:var(--ink-soft); font-size:12px; margin-top:36px;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="perforation"></div>
+    <div class="eyebrow">Fasavimas · POP indeliai</div>
+    <h1>Lipdukų užsakymo skaičiuoklė</h1>
+    <p class="sub">Užkelkite failus ir pasidarykite kavos. Skaičiuoklė padirbės už jus ;)</p>
+  </div>
+
+  <div class="steps">
+    <div class="card">
+      <div class="step-head"><span class="step-num">1</span><span class="step-title">Žinynas (POP indeliai + Žaliava)</span></div>
+      <p class="step-desc">Failas.xlsx iš SharePoint -&gt; Operations -&gt; Fasavimas (skaičiuoklė).</p>
+      <label class="dropzone" id="dz-ref">
+        <input type="file" id="file-ref" accept=".xlsx,.xls">
+        <div id="dz-ref-text">Spustelėkite arba įmeskite failą čia</div>
+      </label>
+      <div class="status-line idle" id="status-ref"></div>
+    </div>
+
+    <div class="card">
+      <div class="step-head"><span class="step-num">2</span><span class="step-title">FAS dokumentas</span></div>
+      <p class="step-desc">Failas.xls formatu iš Rivilė -&gt; Vidinė apskaita -&gt; Vidinės operacijos</p>
+      <label class="dropzone" id="dz-fas">
+        <input type="file" id="file-fas" accept=".xls,.xlsx,.xml">
+        <div id="dz-fas-text">Spustelėkite arba įmeskite failą čia</div>
+      </label>
+      <div class="status-line idle" id="status-fas"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn-calc" disabled>Skaičiuoti</button>
+  </div>
+
+  <div class="card results-card" id="results-card">
+    <div class="results-head">
+      <div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:17px;" id="results-title">Rezultatas</div>
+      </div>
+      <div class="summary-pills" id="summary-pills"></div>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-source">Žaliava (iš FAS)</th>
+            <th class="col-select">Indelio kodas</th>
+            <th class="col-aprasymas">Indelio aprašymas</th>
+            <th class="col-svoris">Svoris, kg</th>
+            <th class="col-kiekis">Kiekis</th>
+            <th class="col-date">Galiojimas</th>
+            <th class="col-status"></th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <span><i class="status-dot ok"></i> atpažinta automatiškai</span>
+      <span><i class="status-dot warn"></i> reikia patikrinti / pasirinkti rankiniu būdu</span>
+    </div>
+
+    <div class="actions" style="margin-bottom:0;">
+      <button class="btn-secondary" id="btn-reset" style="margin-right:10px;">Pradėti iš naujo</button>
+      <button class="btn-primary" id="btn-download">Atsisiųsti rezultatą (.xlsx)</button>
+    </div>
+  </div>
+
+  <footer>Skaičiavimai vyksta jūsų naršyklėje — failai nėra siunčiami į serverį.</footer>
+</div>
+
+<script>
+/* ===================== matching / calc logic ===================== */
+function foldAccents(s){
+  return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function cleanStr(v){
+  if(v==null) return '';
+  return v.toString().replace(/\u00a0/g,' ').trim();
+}
+function stem(w){
+  if(w.length>4 && w.endsWith('IES')) return w.slice(0,-3)+'Y';
+  if(w.length>3 && w.endsWith('S') && !w.endsWith('SS')) return w.slice(0,-1);
+  return w;
+}
+function tokenizeFlavor(desc){
+  if(!desc) return [];
+  let s = desc.toString().toUpperCase();
+  s = s.replace(/\u00a0/g,' ');
+  s = s.replace(/\d+[.,]?\d*\s*(KG|G|ML|L)\b/g,' ');
+  s = s.replace(/\bX\s*\d+\b/g,' ');
+  s = s.replace(/[(),.\-]/g,' ');
+  s = s.replace(/\d+/g,' ');
+  return s.split(/\s+/).map(w=>w.trim()).filter(w=>w.length>1).map(stem);
+}
+const BASE_STOP = new Set(['VNT','KG','G','ML','L','X']);
+function buildStopWords(descriptions, threshold){
+  threshold = threshold || 0.6;
+  const freq = {};
+  const n = descriptions.length || 1;
+  descriptions.forEach(d=>{
+    const ws = new Set(tokenizeFlavor(d));
+    ws.forEach(w=> freq[w]=(freq[w]||0)+1);
+  });
+  const stop = new Set(BASE_STOP);
+  for(const w in freq){ if(freq[w]/n >= threshold) stop.add(w); }
+  return stop;
+}
+function flavorWordSet(desc, stop){
+  return new Set(tokenizeFlavor(desc).filter(w=>!stop.has(w)));
+}
+function findBestPopMatch(zaliavaDesc, popList, zStop, pStop){
+  let zWords = flavorWordSet(zaliavaDesc, zStop);
+  // saugiklis: jei agresyvus bendrų žodžių filtravimas (mažuose sąrašuose) paliko 0 žodžių, naudoti švelnesnį filtrą
+  if(zWords.size===0) zWords = flavorWordSet(zaliavaDesc, BASE_STOP);
+  if(zWords.size===0) return {pop:null, score:0};
+  let best=null, bestScore=0;
+  for(const pop of popList){
+    let pWords = flavorWordSet(pop.aprasymas, pStop);
+    if(pWords.size===0) pWords = flavorWordSet(pop.aprasymas, BASE_STOP);
+    let common=0;
+    zWords.forEach(w=>{ if(pWords.has(w)) common++; });
+    const score = common/zWords.size;
+    if(score>bestScore){ bestScore=score; best=pop; }
+  }
+  return {pop:best, score:bestScore};
+}
+function dateOnlyStr(raw){
+  if(!raw) return '';
+  return raw.toString().trim().split(' ')[0];
+}
+function reverseDate(raw){
+  if(!raw) return '';
+  const datePart = dateOnlyStr(raw);
+  const parts = datePart.split('.');
+  if(parts.length!==3) return raw.toString();
+  return parts.reverse().join('.');
+}
+
+/* ===================== app state ===================== */
+let refData = null;   // {pop:[{kodas,aprasymas,svoris}], zaliava:[...]}
+let fasData = null;   // {docNr, rows:[{kodasPs,pav,kiekis,serija2}]}
+let results = [];     // computed/editable rows
+
+const el = id => document.getElementById(id);
+
+function setStatus(targetId, ok, msg){
+  const node = el(targetId);
+  node.className = 'status-line ' + (ok ? 'ok':'err');
+  node.innerHTML = (ok ? '✓ ' : '⚠ ') + msg;
+}
+
+function sheetToRows(sheet){
+  return XLSX.utils.sheet_to_json(sheet, {header:1, defval:null, raw:true});
+}
+
+function mapRefRows(rows){
+  let headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => c && foldAccents(c).includes('kodas')));
+  if(headerIdx===-1) headerIdx = 0;
+  const header = (rows[headerIdx]||[]).map(h => foldAccents(h));
+  const idxKodas = header.findIndex(h=>h.includes('kodas'));
+  const idxApr = header.findIndex(h=>h.includes('apras'));
+  const idxSvoris = header.findIndex(h=>h.includes('svoris'));
+  const out = [];
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const r = rows[i];
+    if(!r) continue;
+    const kodas = cleanStr(r[idxKodas]);
+    if(!kodas) continue;
+    out.push({ kodas, aprasymas: cleanStr(r[idxApr]), svoris: Number(r[idxSvoris])||0 });
+  }
+  return out;
+}
+
+async function handleRefFile(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const popName = wb.SheetNames.find(n => foldAccents(n).includes('pop') || foldAccents(n).includes('indeli'));
+    const zalName = wb.SheetNames.find(n => foldAccents(n).includes('zaliav'));
+    if(!popName || !zalName){
+      throw new Error('Faile nerasta lapų „POP indeliai" ir „Zaliava". Rasti lapai: ' + wb.SheetNames.join(', '));
+    }
+    const popList = mapRefRows(sheetToRows(wb.Sheets[popName]));
+    const zalList = mapRefRows(sheetToRows(wb.Sheets[zalName]));
+    if(popList.length===0 || zalList.length===0){
+      throw new Error('Lapuose nerasta duomenų eilučių (patikrinkite stulpelius „Kodas", „Aprašymas", „Svoris, kg").');
+    }
+    refData = {pop:popList, zaliava:zalList};
+    el('dz-ref-text').innerHTML = '<span class="fname">'+file.name+'</span>';
+    setStatus('status-ref', true, popList.length + ' indeliai, ' + zalList.length + ' žaliavos');
+  }catch(e){
+    refData = null;
+    setStatus('status-ref', false, e.message);
+  }
+  updateCalcButton();
+}
+
+async function handleFasFile(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetToRows(sheet);
+    if(!rows || rows.length<2) throw new Error('Failas tuščias arba neatpažintas.');
+    const header = (rows[0]||[]).map(h => (h==null?'':h.toString()));
+    const find = name => header.indexOf(name);
+    const idx = {
+      kodasPs: find('I10_KODAS_PS'),
+      pav: find('I10_PAV'),
+      kiekis: find('I10_KIEKIS'),
+      serija2: find('I10_SERIJA2'),
+      dokNr: find('I09_DOK_NR'),
+    };
+    if(idx.kodasPs===-1 || idx.pav===-1 || idx.kiekis===-1 || idx.serija2===-1){
+      throw new Error('Nerasta tikėtinų FAS stulpelių (I10_KODAS_PS / I10_PAV / I10_KIEKIS / I10_SERIJA2). Patikrinkite, ar failo struktūra atitinka FAS00002129.');
+    }
+    const dataRows = [];
+    for(let i=1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r) continue;
+      const serija2 = cleanStr(r[idx.serija2]);
+      if(!serija2) continue;
+      dataRows.push({
+        kodasPs: cleanStr(r[idx.kodasPs]),
+        pav: cleanStr(r[idx.pav]),
+        kiekis: Number(r[idx.kiekis])||0,
+        serija2
+      });
+    }
+    if(dataRows.length===0) throw new Error('Faile nerasta žaliavos eilučių su partijos data (stulpelis BA).');
+    const docNr = idx.dokNr>=0 ? cleanStr(rows[1][idx.dokNr]) : '';
+    fasData = {docNr, rows: dataRows};
+    el('dz-fas-text').innerHTML = '<span class="fname">'+file.name+'</span>';
+    setStatus('status-fas', true, (docNr? docNr+' — ':'') + dataRows.length + ' žaliavos eilutės rastos');
+  }catch(e){
+    fasData = null;
+    setStatus('status-fas', false, e.message);
+  }
+  updateCalcButton();
+}
+
+function updateCalcButton(){
+  el('btn-calc').disabled = !(refData && fasData);
+}
+
+function computeResults(){
+  const zStop = buildStopWords(refData.zaliava.map(z=>z.aprasymas));
+  const pStop = buildStopWords(refData.pop.map(p=>p.aprasymas));
+
+  // group FAS lines by žaliavos kodas — skirtingos partijos (galiojimo datos) tos pačios prekės sujungiamos į vieną eilutę
+  const groups = [];
+  const groupByKodas = {};
+  fasData.rows.forEach(row=>{
+    const key = row.kodasPs;
+    if(!groupByKodas[key]){ groupByKodas[key] = { kodasPs: key, pav: row.pav, lines: [] }; groups.push(groupByKodas[key]); }
+    groupByKodas[key].lines.push(row);
+  });
+
+  results = groups.map(g=>{
+    const zMatch = refData.zaliava.find(z => z.kodas.trim() === g.kodasPs.trim());
+    const kiekisVnt = g.lines.reduce((s,l)=> s + (Number(l.kiekis)||0), 0);
+    let totalKg = null;
+    if(zMatch) totalKg = kiekisVnt * (Number(zMatch.svoris)||0);
+
+    // trumpiausias (greičiausiai baigsis) galiojimas iš sujungtų partijų — YYYY.MM.DD lygintina kaip tekstas
+    let earliest = dateOnlyStr(g.lines[0].serija2);
+    g.lines.forEach(l=>{ const d = dateOnlyStr(l.serija2); if(d && (!earliest || d < earliest)) earliest = d; });
+
+    let popMatch=null, score=0;
+    if(zMatch){
+      const r = findBestPopMatch(zMatch.aprasymas, refData.pop, zStop, pStop);
+      popMatch=r.pop; score=r.score;
+    }
+    const svorisIndelio = popMatch ? Number(popMatch.svoris) : null;
+    const kiekis = (totalKg!=null && svorisIndelio) ? Math.floor(totalKg/svorisIndelio) : null;
+    return {
+      fasKodas: g.kodasPs,
+      fasPav: g.pav,
+      kiekisVnt,
+      totalKg,
+      batchCount: g.lines.length,
+      zaliavaMatched: !!zMatch,
+      indelioKodas: popMatch ? popMatch.kodas : '',
+      indelioAprasymas: popMatch ? popMatch.aprasymas : (zMatch ? '' : g.pav),
+      svorisIndelio,
+      kiekisIndeliu: kiekis,
+      galiojimas: reverseDate(earliest),
+      matchScore: score,
+      needsReview: !zMatch || !popMatch || score < 0.999,
+    };
+  });
+}
+
+function popOptionsHtml(selectedKodas){
+  let html = '<option value="">— pasirinkti —</option>';
+  refData.pop.forEach(p=>{
+    const sel = (p.kodas===selectedKodas) ? 'selected' : '';
+    html += '<option value="'+p.kodas.replace(/"/g,'&quot;')+'" '+sel+'>'+p.kodas+' — '+p.aprasymas+'</option>';
+  });
+  return html;
+}
+
+function renderResults(){
+  const tbody = el('results-body');
+  tbody.innerHTML = '';
+  results.forEach((r, i)=>{
+    const tr = document.createElement('tr');
+    tr.className = r.needsReview ? 'needs-review' : '';
+    tr.innerHTML = `
+      <td class="col-num">${i+1}</td>
+      <td class="src-cell col-source"><span class="src-code">${r.fasKodas}</span><br><b>${r.fasPav}</b><br>${r.kiekisVnt} vnt ${r.totalKg!=null? '· '+r.totalKg.toFixed(2)+' kg':''}${r.batchCount>1? '<br>sujungtos '+r.batchCount+' partijos':''}</td>
+      <td class="col-select"><select data-i="${i}" class="sel-indelis">${popOptionsHtml(r.indelioKodas)}</select></td>
+      <td class="col-aprasymas"><input type="text" data-i="${i}" class="inp-aprasymas" value="${(r.indelioAprasymas||'').replace(/"/g,'&quot;')}"></td>
+      <td class="col-svoris"><input type="number" step="0.01" data-i="${i}" class="inp-svoris num-input" value="${r.svorisIndelio!=null? Number(r.svorisIndelio).toFixed(2):''}"></td>
+      <td class="col-kiekis"><input type="number" step="1" data-i="${i}" class="inp-kiekis num-input" value="${r.kiekisIndeliu!=null? r.kiekisIndeliu:''}"></td>
+      <td class="col-date"><input type="text" data-i="${i}" class="inp-galiojimas" value="${r.galiojimas}"></td>
+      <td class="col-status"><span class="status-dot ${r.needsReview?'warn':'ok'}" title="${r.needsReview? 'Patikrinkite rankiniu būdu':'Atpažinta automatiškai'}"></span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  attachRowListeners();
+  renderSummary();
+  el('results-card').style.display = 'block';
+}
+
+function attachRowListeners(){
+  document.querySelectorAll('.sel-indelis').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const i = Number(e.target.dataset.i);
+      const kodas = e.target.value;
+      const pop = refData.pop.find(p=>p.kodas===kodas);
+      const r = results[i];
+      r.indelioKodas = kodas;
+      r.indelioAprasymas = pop ? pop.aprasymas : '';
+      r.svorisIndelio = pop ? Number(pop.svoris) : null;
+      r.kiekisIndeliu = (r.totalKg!=null && r.svorisIndelio) ? Math.floor(r.totalKg/r.svorisIndelio) : r.kiekisIndeliu;
+      r.needsReview = !kodas;
+      renderResults();
+    });
+  });
+  document.querySelectorAll('.inp-aprasymas').forEach(inp=>{
+    inp.addEventListener('input', e=>{ results[Number(e.target.dataset.i)].indelioAprasymas = e.target.value; });
+  });
+  document.querySelectorAll('.inp-svoris').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      results[i].svorisIndelio = e.target.value===''? null : Number(e.target.value);
+    });
+  });
+  document.querySelectorAll('.inp-kiekis').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      results[i].kiekisIndeliu = e.target.value===''? null : Number(e.target.value);
+    });
+  });
+  document.querySelectorAll('.inp-galiojimas').forEach(inp=>{
+    inp.addEventListener('input', e=>{ results[Number(e.target.dataset.i)].galiojimas = e.target.value; });
+  });
+}
+
+function renderSummary(){
+  const total = results.reduce((s,r)=> s + (Number(r.kiekisIndeliu)||0), 0);
+  const reviewCount = results.filter(r=>r.needsReview).length;
+  el('results-title').textContent = fasData.docNr ? ('Rezultatas — ' + fasData.docNr) : 'Rezultatas';
+  let html = '<span class="pill">'+results.length+' partijos</span><span class="pill">viso '+total+' indelių</span>';
+  if(reviewCount>0) html += '<span class="pill warn">'+reviewCount+' reikia patikrinti</span>';
+  el('summary-pills').innerHTML = html;
+}
+
+function downloadResult(){
+  const header = ['Indelio kodas','Indelio aprašymas','Svoris (indelio), kg','Indelių/lipdukų kiekis','Galiojimas (diena.mėnuo.metai)'];
+  const rows = results.map(r=>[r.indelioKodas, r.indelioAprasymas, r.svorisIndelio, r.kiekisIndeliu, r.galiojimas]);
+  rows.sort((a,b)=> (a[0]||'').localeCompare(b[0]||''));
+  const total = rows.reduce((s,row)=> s+(Number(row[3])||0), 0);
+  rows.push(['VISO','','',total,'']);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws['!cols'] = [{wch:14},{wch:55},{wch:18},{wch:20},{wch:18}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Lipdukai');
+  const fname = 'Lipdukai_' + (fasData.docNr || 'rezultatas') + '.xlsx';
+  XLSX.writeFile(wb, fname);
+}
+
+/* ===================== wiring ===================== */
+el('file-ref').addEventListener('change', e=>{ if(e.target.files[0]) handleRefFile(e.target.files[0]); });
+el('file-fas').addEventListener('change', e=>{ if(e.target.files[0]) handleFasFile(e.target.files[0]); });
+
+['dz-ref','dz-fas'].forEach(id=>{
+  const zone = el(id);
+  zone.addEventListener('dragover', e=>{ e.preventDefault(); });
+  zone.addEventListener('drop', e=>{
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if(!f) return;
+    if(id==='dz-ref') handleRefFile(f); else handleFasFile(f);
+  });
+});
+
+el('btn-calc').addEventListener('click', ()=>{
+  computeResults();
+  renderResults();
+  el('results-card').scrollIntoView({behavior:'smooth', block:'start'});
+});
+el('btn-download').addEventListener('click', downloadResult);
+el('btn-reset').addEventListener('click', ()=>{
+  refData=null; fasData=null; results=[];
+  el('file-ref').value=''; el('file-fas').value='';
+  el('dz-ref-text').textContent='Spustelėkite arba įmeskite failą čia';
+  el('dz-fas-text').textContent='Spustelėkite arba įmeskite failą čia';
+  el('status-ref').className='status-line idle';
+  el('status-fas').className='status-line idle';
+  el('results-card').style.display='none';
+  updateCalcButton();
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+</script>
+</body>
+</html>
